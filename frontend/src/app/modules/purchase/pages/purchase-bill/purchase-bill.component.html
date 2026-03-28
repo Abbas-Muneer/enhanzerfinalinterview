@@ -1,0 +1,209 @@
+<section class="purchase-page">
+  <header class="top-header">
+    <div>
+      <h1>Purchase Bill</h1>
+      <p>Mini Purchase Management Module</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="header-action" (click)="startNew()">New</button>
+      <button type="button" class="header-action" (click)="savePurchaseBill()" [disabled]="isSaving()">Save</button>
+      <button type="button" class="header-action secondary" (click)="saveOffline()">Save Offline</button>
+      <button type="button" class="header-action secondary" (click)="syncPendingBills()">Sync Pending</button>
+      <button type="button" class="header-action secondary" (click)="exportPdf()">Export PDF</button>
+    </div>
+  </header>
+
+  <nav class="primary-tabs">
+    <button type="button" class="active">Header</button>
+    <button type="button" class="active">Details</button>
+    <button type="button">Summary</button>
+  </nav>
+
+  <main class="content-shell" *ngIf="!isLoading(); else loadingState">
+    <section class="left-panel">
+      <div class="status-strip">
+        <span class="status-chip" [class.offline]="!isOnline()">{{ isOnline() ? 'Online' : 'Offline' }}</span>
+        <span class="status-chip neutral">Pending Sync: {{ pendingQueue().length }}</span>
+        <span class="status-chip neutral">Mode: {{ selectedBillId() ? 'Edit' : 'Create' }}</span>
+      </div>
+
+      <form class="header-form" [formGroup]="headerForm" novalidate>
+        <div class="form-row four-columns">
+          <div class="field">
+            <label>Purchase Date*</label>
+            <input type="date" formControlName="purchaseDate">
+            <p class="validation" *ngIf="hasHeaderError('purchaseDate', 'required')">Purchase date is required.</p>
+          </div>
+          <div class="field">
+            <label>Supplier Name*</label>
+            <input type="text" formControlName="supplierName">
+            <p class="validation" *ngIf="hasHeaderError('supplierName', 'required')">Supplier name is required.</p>
+          </div>
+          <div class="field">
+            <label>Reference No</label>
+            <input type="text" formControlName="referenceNo">
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <input type="text" formControlName="notes">
+          </div>
+        </div>
+      </form>
+
+      <nav class="inner-tabs">
+        <button type="button" class="active">Items</button>
+        <button type="button">Header</button>
+        <button type="button">Summary</button>
+      </nav>
+
+      <form class="entry-form" [formGroup]="lineForm" novalidate>
+        <div class="form-row six-columns">
+          <div class="field field-with-suggestions">
+            <label>Item*</label>
+            <input type="text" formControlName="itemName" autocomplete="off">
+            <div class="suggestions" *ngIf="filteredItems().length">
+              <button type="button" *ngFor="let item of filteredItems()" (click)="selectItemSuggestion(item)">
+                {{ item.name }}
+              </button>
+            </div>
+            <p class="validation" *ngIf="hasLineError('itemName', 'required')">Item is required.</p>
+          </div>
+          <div class="field">
+            <label>Batch*</label>
+            <select formControlName="batchCode">
+              <option value="">Select location</option>
+              <option *ngFor="let location of locations()" [value]="location.code">{{ location.name }}</option>
+            </select>
+            <p class="validation" *ngIf="hasLineError('batchCode', 'required')">Batch is required.</p>
+          </div>
+          <div class="field">
+            <label>Cost</label>
+            <input type="number" formControlName="cost" min="0">
+          </div>
+          <div class="field">
+            <label>Price</label>
+            <input type="number" formControlName="price" min="0">
+          </div>
+          <div class="field">
+            <label>Quantity</label>
+            <input type="number" formControlName="quantity" min="0.01" step="0.01">
+          </div>
+          <div class="field">
+            <label>Discount %</label>
+            <input type="number" formControlName="discountPercentage" min="0" max="100">
+          </div>
+        </div>
+
+        <div class="form-row three-columns compact">
+          <div class="field readonly">
+            <label>Total Cost</label>
+            <input type="number" formControlName="totalCost" readonly>
+          </div>
+          <div class="field readonly">
+            <label>Total Selling</label>
+            <input type="number" formControlName="totalSelling" readonly>
+          </div>
+          <div class="field action-cell">
+            <button type="button" class="add-button" (click)="addOrUpdateLine()">
+              {{ editingLineIndex() === null ? 'Add Row' : 'Update Row' }}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <p class="message success" *ngIf="statusMessage()">{{ statusMessage() }}</p>
+      <p class="message error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Batch</th>
+              <th>Cost</th>
+              <th>Price</th>
+              <th>Qty</th>
+              <th>Discount %</th>
+              <th>Total Cost</th>
+              <th>Total Selling</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="!itemRows().length">
+              <td colspan="9" class="empty-state">No line items added yet.</td>
+            </tr>
+            <tr *ngFor="let row of itemRows(); let index = index">
+              <td>{{ row.itemName }}</td>
+              <td>{{ row.batchCode }}</td>
+              <td>{{ formatCurrency(row.cost) }}</td>
+              <td>{{ formatCurrency(row.price) }}</td>
+              <td>{{ row.quantity }}</td>
+              <td>{{ formatCurrency(row.discountPercentage) }}</td>
+              <td>{{ formatCurrency(row.totalCost) }}</td>
+              <td>{{ formatCurrency(row.totalSelling) }}</td>
+              <td class="row-actions">
+                <button type="button" (click)="editLine(index)">Edit</button>
+                <button type="button" class="danger" (click)="deleteLine(index)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <section class="data-section">
+        <div class="section-header">
+          <h3>Saved Purchase Bills</h3>
+        </div>
+        <div class="saved-bills">
+          <button type="button" class="saved-bill-card" *ngFor="let bill of savedBills()" (click)="loadPurchaseBill(bill.id)">
+            <strong>{{ bill.billNumber }}</strong>
+            <span>{{ bill.supplierName }}</span>
+            <span>{{ bill.purchaseDate | date:'yyyy-MM-dd' }}</span>
+            <span>{{ bill.syncStatus }} | {{ formatCurrency(bill.totalAmount) }}</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="data-section">
+        <div class="section-header">
+          <h3>Audit Trail</h3>
+        </div>
+        <div class="audit-list">
+          <div class="audit-item" *ngFor="let log of auditLogs()">
+            <strong>{{ log.action }} {{ log.entity }}</strong>
+            <span>{{ log.createdAt | date:'yyyy-MM-dd HH:mm' }}</span>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <aside class="summary-panel">
+      <section class="summary-section">
+        <h3>Summary</h3>
+      </section>
+
+      <section class="summary-section">
+        <h4>Item Summary</h4>
+        <div class="summary-row"><span>Total Items</span><strong>{{ summary().totalItems }}</strong></div>
+        <div class="summary-row"><span>Total Quantity</span><strong>{{ formatCurrency(summary().totalQuantity) }}</strong></div>
+      </section>
+
+      <section class="summary-section">
+        <h4>Financial Summary</h4>
+        <div class="summary-row"><span>Total Cost</span><strong>{{ formatCurrency(summary().totalCost) }}</strong></div>
+        <div class="summary-row"><span>Total Amount</span><strong>{{ formatCurrency(summary().totalAmount) }}</strong></div>
+      </section>
+
+      <section class="summary-section">
+        <h4>Sync Summary</h4>
+        <div class="summary-row"><span>Pending Queue</span><strong>{{ pendingQueue().length }}</strong></div>
+        <div class="summary-row"><span>Saved Bills</span><strong>{{ savedBills().length }}</strong></div>
+      </section>
+    </aside>
+  </main>
+
+  <ng-template #loadingState>
+    <div class="loading-state">Loading purchase module...</div>
+  </ng-template>
+</section>
